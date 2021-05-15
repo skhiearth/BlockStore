@@ -2,6 +2,7 @@ require('babel-register');
 require('babel-polyfill');
 const HDWalletProvider = require('truffle-hdwallet-provider');
 const fs = require('fs');
+const mnemonic = "urban speed oppose uphold parade unlock swallow tuition traffic guitar mixed blush";
 const Kit = require('@celo/contractkit')
 const kit = Kit.newKit('https://alfajores-forno.celo-testnet.org')
 
