@@ -11,7 +11,7 @@ function SellerAuth() {
         var config = {
             containerID: "sawo-container",
             identifierType: "email",
-            apiKey: "61864f99-18bb-4e31-ad4d-8fd28fd4ec65",
+            apiKey: "fcf1da27-4d2f-455f-864c-2e7a14889b9b",
             onSuccess: (payload) => {
                 // console.log(payload); 
                 setPayload(payload)
