@@ -1,67 +1,55 @@
 import React, { Component } from 'react';
-import Identicon from 'identicon.js';
+import { withRouter } from "react-router";
 import Web3 from 'web3';
 import BlockStore from '../abis/BlockStore.json'
+import bg from './Assets/bg.png'
+import { FingerprintSpinner } from 'react-epic-spinners'
+import styles from './App.module.css';
+let ContractKit = require("@celo/contractkit")
 
-class Main extends Component {
+let kit
+
+class CreateSeller extends Component {
 
   async componentWillMount() {
-    await this.loadWeb3()
-    await this.loadBlockchainData()
+    // await this.loadBlockchainData()
+    this.connectCeloWallet()
   }
 
-  async loadWeb3() {
-    if (window.ethereum) {
-      window.web3 = new Web3(window.ethereum)
-      await window.ethereum.enable()
-    }
-    else if (window.web3) {
-      window.web3 = new Web3(window.web3.currentProvider)
-    }
-    else {
-      window.alert('Non-Ethereum browser detected. You should consider trying MetaMask!')
-    }
-  }
+  async connectCeloWallet() {
+    if (window.celo) {
+      try {
+        await window.celo.enable()
+  
+        const web3 = new Web3(window.celo)
+        kit = ContractKit.newKitFromWeb3(web3)
+  
+        const accounts = await kit.web3.eth.getAccounts()
+        kit.defaultAccount = accounts[0]
 
-  async loadBlockchainData() {
-    const web3 = window.web3
-    // Load account
-    const accounts = await web3.eth.getAccounts()
-    this.setState({ account: accounts[0] })
-    // Network ID
-    const networkId = await web3.eth.net.getId()
-    const networkData = BlockStore.networks[networkId]
-    if(networkData) {
-      const blockStore = new web3.eth.Contract(BlockStore.abi, networkData.address)
-      this.setState({ blockStore })
-      
-      const productCount = await blockStore.methods.productCount().call()
-      this.setState({ productCount })
+        this.setState({ account: accounts[0] })
+        // Network ID
+        const networkId = await web3.eth.net.getId()
+        const networkData = BlockStore.networks[networkId]
+        if(networkData) {
+          const blockStore = new web3.eth.Contract(BlockStore.abi, networkData && networkData.address)
+          this.setState({ blockStore })
 
-      // Load Products
-      for (var i = 0; i < productCount; i++) {
-        const prod = await blockStore.methods.ProductList(i).call()
-        console.log(prod)
-        this.setState({
-          products: [...this.state.products, prod]
-        })
+          this.setState({ loading: false})
+
+          this.setState({ account: accounts[0] })
+        } 
+      } catch (error) {
+        console.log(`⚠️ ${error}.`)
       }
-
-      // Sort products based on cost
-      this.setState({
-        certificates: this.state.products.sort((a,b) => b.price - a.price)
-      })
-
-      this.setState({ loading: false})
-
     } else {
-      window.alert('BlockStore contract not deployed to detected network.')
+      console.log("⚠️ Please install the CeloExtensionWallet.")
     }
   }
 
-  createOrder(name, description, value) {
+  createSeller(name) {
     this.setState({ loading: true })
-    this.state.blockStore.methods.createOrder(name, description, value).send({ from: this.state.account })
+    this.state.blockStore.methods.createSeller(name).send({ from: this.state.account })
     .once('receipt', (receipt) => {
       this.setState({ loading: false })
       console.log(this.state.loading)
@@ -70,73 +58,57 @@ class Main extends Component {
 
   constructor(props) {
     super(props)
+
     this.state = {
       account: '',
       blockStore: null,
-      productCount: 0,
-      products: [],
-      loading: true,
-      notrequest: true
+      authenticated: false,
+      seller: [],
+      loading: true
     }
-
-    this.createOrder = this.createOrder.bind(this)
+    
+    this.createSeller = this.createSeller.bind(this)
   }
-
+  
   render() {
     return (
-      // Purchased Certificates column & Identicons
-      <div className="container-fluid">
+      <div styles={{ backgroundImage:`url(${bg})`}}>
+        { this.state.loading
+          ?  
+          <div className="center mt-19">
+            {/* loader */}
+              <FingerprintSpinner
+                style={{width: "100%"}}
+                color='white'
+                size='200'
+	            />
+          </div>
+          : 
+          <div className="container-fluid">
         <div className="row">
           <main role="main" className="col-lg-12 ml-auto mr-auto" style={{ maxWidth: '800px' }}>
             <div className="content mr-auto ml-auto">
               <p>&nbsp;</p>
+              <p class="m-0 text-center text-dark" className={styles.footerHeader}>
+                Welcome, {this.props.payload.identifier}
+              </p>
+                <form onSubmit={(event) => {
+                  event.preventDefault()
+                  this.createSeller(this.props.payload.identifier)
+                }}>
+                <button type="submit" className="btn btn btn-outline-light btn-block">Send Seller Creation Request</button>
+              </form>
               <p>&nbsp;</p>
-              { this.state.products.map((product, key) => {
-                return(
-                  <div className="card mb-4" key={key} >
-                    <div className="card-header">
-                      <small>{product.name}</small>
-                      <img
-                        alt="identicon"
-                        className='ml-2 float-right'
-                        width='50'
-                        height='50'
-                        src={`data:image/png;base64,${new Identicon(product.seller, 50).toString()}`}
-                      />
-                      <small className="text-muted float-right">Seller: </small>
-                      
-                      <p></p>
-                      <small style={{marginTop: -20}} className="text-muted float-right">{product.seller.toString()}</small>
-                      <small className="text-muted">Product ID: {(product.productId.toString())}</small>
-                    </div>
-                    <ul id="certificateList" className="list-group list-group-flush">
-                      <li key={key} className="list-group-item py-2">
-                        <small className="float-left mt-1 text-muted">
-                          Price: {window.web3.utils.fromWei(product.price.toString(), 'Ether')} ETH
-                        </small>
-
-                        <button
-                          className="btn btn-outline-success btn-sm float-right pt-0"
-                          name={product.productId}
-                          onClick={(event) => {
-                            let cost = product.price
-                            // this.props.purchaseCertificate(event.target.name, cost.toString())
-                          }}
-                        >
-                        Buy
-                        </button>
-
-                      </li>
-                    </ul>
-                  </div>
-                )
-              })}
             </div>
           </main>
         </div>
+      </div>
+        }
       </div>
     );
   }
 }
 
-export default Main;
+const CreateSellerWithRouter = withRouter(CreateSeller);
+
+export default CreateSellerWithRouter;

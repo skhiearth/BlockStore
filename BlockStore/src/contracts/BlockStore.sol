@@ -3,23 +3,38 @@
 pragma solidity >=0.5.0;
 
 contract BlockStore {
+
+    string name;
+
+    constructor() public {
+        name = "BlockStore";
+    }
+
+    function getName() public view returns (string memory) {
+        return name;
+    }
+
+    function setName(string calldata newName) external {
+        name = newName;
+    }
     
-    // Track total number of products, orders and sellers
+     // Track total number of products, orders and sellers
     uint public productCount = 0;
     uint public orderCount = 0;
     uint public sellerCount = 0;
+    uint public buyerCount = 0;
     
     // Mappings to keep track of structs
     mapping(address => Seller) public Sellers;
-    mapping(address => Buyer) Buyers;
-    mapping(uint => Product) Products;
+    mapping(address => Buyer) public Buyers;
+    mapping(uint => Product) public Products;
     
     // List of all product
     Product[] public ProductList;
     
     // Get orders for a user
-    mapping(address => Order[]) UserOrders;
-    mapping(address => PlacedOrders[]) SellerOrders;
+    mapping(address => Order[]) public UserOrders;
+    mapping(address => PlacedOrders[]) public SellerOrders;
     
     
     // Seller
@@ -32,7 +47,9 @@ contract BlockStore {
     // Buyer
     struct Buyer {
         string name;
+        address publicAddress;
         string shippingAddress;
+        bool created;
     }
     
     // Product
@@ -49,6 +66,8 @@ contract BlockStore {
         uint productId;
         uint orderId;
         string status;
+        address seller;
+        uint price;
     }
     
     // PlacedOrder
@@ -57,6 +76,7 @@ contract BlockStore {
         uint orderId;
         string status;
         address buyer;
+        uint price;
     }
     
     
@@ -71,7 +91,10 @@ contract BlockStore {
     // Create a new buyer
     function createBuyer(string memory _name, string memory _shippingAddress) public {
         Buyers[msg.sender].name = _name; // Create new instance - specify name
+        Buyers[msg.sender].publicAddress = msg.sender; // Specify public address
         Buyers[msg.sender].shippingAddress = _shippingAddress; // Specify shipping address
+        Buyers[msg.sender].created = true; // Validate creation
+        buyerCount = buyerCount + 1; // Increment for subsequent creation
     }
     
     // Create a new product
@@ -91,10 +114,10 @@ contract BlockStore {
     function createOrder(uint _id) public payable {
         require(msg.value == Products[_id].price, "Incorrect value of funds");
         
-        Order memory order = Order(_id, orderCount, "Order Placed"); // Create new instance of struct
+        Order memory order = Order(_id, orderCount, "Order Placed", Products[_id].seller, Products[_id].price); // Create new instance of struct
         UserOrders[msg.sender].push(order); // Add order to list of users' orders
         
-        PlacedOrders memory placedOrder = PlacedOrders(_id, orderCount, "Order Placed", msg.sender); // Create new instance of struct
+        PlacedOrders memory placedOrder = PlacedOrders(_id, orderCount, "Order Placed", msg.sender, Products[_id].price); // Create new instance of struct
         SellerOrders[Products[_id].seller].push(placedOrder); // Add placed order to list of sellers' orrders
         
         Products[_id].seller.transfer(msg.value); // Transfer funds to seller

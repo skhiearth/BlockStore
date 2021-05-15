@@ -6,64 +6,95 @@ import styles from './App.module.css';
 import BlockStore from '../abis/BlockStore.json'
 import bg from './Assets/bg.png'
 import { FingerprintSpinner } from 'react-epic-spinners'
+let ContractKit = require("@celo/contractkit")
+
+let kit
 
 class Seller extends Component {
 
   async componentWillMount() {
-    await this.loadWeb3()
-    await this.loadBlockchainData()
+    // await this.loadBlockchainData()
+    this.connectCeloWallet()
   }
 
-  async loadWeb3() {
-    if (window.ethereum) {
-      window.web3 = new Web3(window.ethereum)
-      await window.ethereum.enable()
-    }
-    else if (window.web3) {
-      window.web3 = new Web3(window.web3.currentProvider)
-    }
-    else {
-      window.alert('Non-Ethereum browser detected. You should consider trying MetaMask!')
-    }
-  }
+  async connectCeloWallet() {
+    if (window.celo) {
+      try {
+        await window.celo.enable()
+  
+        const web3 = new Web3(window.celo)
+        window.web3 = new Web3(window.celo)
+        kit = ContractKit.newKitFromWeb3(web3)
+  
+        const accounts = await kit.web3.eth.getAccounts()
+        kit.defaultAccount = accounts[0]
 
-  async loadBlockchainData() {
-    const web3 = window.web3
-    // Load account
-    const accounts = await web3.eth.getAccounts()
-    this.setState({ account: accounts[0] })
-    // Network ID
-    const networkId = await web3.eth.net.getId()
-    const networkData = BlockStore.networks[networkId]
-    if(networkData) {
-      const blockStore = new web3.eth.Contract(BlockStore.abi, networkData.address)
-      this.setState({ blockStore })
+        this.setState({ account: accounts[0] })
+        // Network ID
+        const networkId = await web3.eth.net.getId()
+        const networkData = BlockStore.networks[networkId]
+        if(networkData) {
+          const blockStore = new web3.eth.Contract(BlockStore.abi, networkData && networkData.address)
+          this.setState({ blockStore })
 
-      const sellerCount = await blockStore.methods.sellerCount().call()
+          this.setState({ loading: false})
 
-      for (var i = 0; i < sellerCount; i++) {
-        const seller = await blockStore.methods.Sellers(accounts[0]).call()
-        if(seller.publicAddress === this.state.account){
-          this.setState({ authenticated: true })
-            if(seller.created === true){
-                this.setState({ seller })
-                this.setState({ authenticated: true })
-                this.setState({ loading: false})
+          this.setState({ account: accounts[0] })
+
+          const sellerCount = await blockStore.methods.sellerCount().call()
+          this.setState({ sellerCount })
+
+          const productCount = await blockStore.methods.productCount().call()
+          this.setState({ productCount })
+
+          const orderCount = await blockStore.methods.orderCount().call()
+          this.setState({ orderCount })
+
+          for (var i = 0; i < sellerCount; i++) {
+            const seller = await blockStore.methods.Sellers(accounts[0]).call()
+            if(seller.publicAddress === this.state.account){
+                if(seller.created === true){
+                    this.setState({ seller })
+                    this.setState({ authenticated: true })
+                    this.setState({ loading: false})
+                    
+                } else {
+                  return <Redirect to='/SellerAuth'/>
+                }
             } else {
               return <Redirect to='/SellerAuth'/>
             }
-        } else {
-          return <Redirect to='/SellerAuth'/>
-        }
-      }
+          }
 
-      this.setState({ loading: false})
-      if(!this.state.authenticated){
-        this.props.history.push('/SellerAuth')
-      }
+          this.setState({ loading: false})
+          if(!this.state.authenticated){
+            this.props.history.push('/SellerAuth')
+          }
 
+          // Load Orders
+          for (var m = 0; m < orderCount; m++) {
+            const order = await blockStore.methods.SellerOrders(this.state.account, m).call()
+            console.log(order)
+            this.setState({
+              orders: [...this.state.orders, order]
+            })
+          }
+
+          // Load Products
+          for (var j = 0; j < productCount; j++) {
+            const prod = await blockStore.methods.ProductList(j).call()
+            console.log(prod)
+            this.setState({
+              products: [...this.state.products, prod]
+            })
+          }
+          
+        } 
+      } catch (error) {
+        console.log(`⚠️ ${error}.`)
+      }
     } else {
-      window.alert('BlockStore contract not deployed to detected network.')
+      console.log("⚠️ Please install the CeloExtensionWallet.")
     }
   }
 
@@ -76,19 +107,32 @@ class Seller extends Component {
     })
   }
 
+  updateOrderStatus(index, status) {
+    this.setState({ loading: true })
+    this.state.blockStore.methods.updateOrderStatus(index, status).send({ from: this.state.account })
+    .once('receipt', (receipt) => {
+      this.setState({ loading: false })
+      console.log(this.state.loading)
+    })
+  }
+
   constructor(props) {
     super(props)
     this.state = {
       account: '',
       blockStore: null,
       authenticated: false,
-      certificates: [],
-      requests: [],
+      sellerCount: 0,
+      orderCount: 0,
+      productCount: 0,
+      products: [],
+      orders: [],
       seller: [],
       loading: true
     }
 
     this.createProduct = this.createProduct.bind(this)
+    this.updateOrderStatus = this.updateOrderStatus.bind(this)
   }
 
   render() {
@@ -147,7 +191,7 @@ class Seller extends Component {
                 </div>
                 <div class="input-group mb-3">
                     <div class="input-group-prepend">
-                        <span class="input-group-text">ETH</span>
+                        <span class="input-group-text">CELO</span>
                     </div>
                     <input
                       id="productValue"
@@ -164,45 +208,43 @@ class Seller extends Component {
                 <div className={styles.verifyTitle} style={{textAlign:"center"}}>Orders</div>
               </div>
               <p></p>
-              { this.state.requests.map((request, key) => {
+              { this.state.orders.map((order, key) => {
                 return(
                     
                   <div className="card mb-4" key={key} >
                     {/* Transaction Information */}
                     <div className="card-header">
-                      <small className="text-muted">Request of ID: {request.id.toString()}</small>
+                      <small className="text-muted">Order ID: {order.orderId.toString()}</small>
                       <p></p>
-                      <small className="text-muted">ID of Certificate: {(request.certificateId.toString())}</small>
+                      <small className="text-muted">Product ID: {(order.productId.toString())}</small>
                       <p></p>
-                      <small className="text-muted">Applicant: {(request.studentId.toString())}</small>
+                      <small className="text-muted">Buyer: {(order.buyer.toString())}</small>
                       <p></p>
-                      <small className="text-muted">Value: {window.web3.utils.fromWei(request.value.toString(), 'Ether')} ETH</small>
+                      <small className="text-muted">Value: {window.web3.utils.fromWei(order.price.toString(), 'Ether')} CELO</small>
                     </div>
                     <ul id="certificateList" className="list-group list-group-flush">
                       <li key={key} className="list-group-item py-3">
-                        
-                        <button
-                          className="btn btn-outline-danger btn-sm float-right pt-0"
-                          style={{marginLeft: 14}}
-                          name={request.identity}
-                          onClick={(event) => {
-                            this.declineRequest(request.certificateId.toString(),
-                            request.studentId.toString(), request.id.toString(), request.value.toString())
-                          }}
-                        >
-                          Decline Request
-                        </button>
 
-                        <button
-                          className="btn btn-outline-success btn-sm float-right pt-0"
-                          name={request.identity}
-                          onClick={(event) => {
-                            this.approveRequest(request.certificateId.toString(),
-                            request.studentId.toString(), request.id.toString())
-                          }}
-                        >
-                          Approve Request
-                        </button>
+                      <small className="text-muted">Current Status: {(order.status.toString())}</small>
+
+                        <form onSubmit={(event) => {
+                            event.preventDefault()
+                            const newStatus = this.newStatus.value
+                            this.updateOrderStatus(key, newStatus)
+                        }}>
+                            <div style={{paddingTop: 14, marginLeft: 6, paddingBottom: 0}} class="input-group mb-3">
+                            <input
+                                style={{marginRight: 6, marginLeft: 6, width: "50%"}}
+                                id="newStatus"
+                                type="text"
+                                ref={(input) => { this.newStatus = input }}
+                                className="form-control"
+                                placeholder="New Status"
+                                required />
+                                <button type="submit"  style={{marginRight: 16}} className="btn btn-outline-success btn-sm float-right pt-0">Update Order Status</button>
+                            </div>
+                        </form>
+
                       </li>
                     </ul>
                   </div>
