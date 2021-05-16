@@ -3,6 +3,8 @@ Code repository, UI elements and supporting documents for the BlockStore project
 
 BlockStore is a platform where individuals and small businesses can kickstart their digital stores on the blockchain. Cryptocurrency Transactions and status tracking would ensure transparency.
 
+Watch the Video Demo [here](https://www.youtube.com/watch?v=EYKn_jwlgzE)
+
 ![App Screenshots](https://github.com/skhiearth/BlockStore/blob/main/Screenshots/Cover%20Page.png?raw=true)
 
 With the ongoing NFT boom, everyone is talking about making quick bucks on the blockchain. While NFT has been mostly restricted to digital artists and collectibles, we want to create a platform that allows small stores and individuals to sell their physical creations directly to the public.
